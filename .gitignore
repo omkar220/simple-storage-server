@@ -142,3 +142,8 @@ $RECYCLE.BIN/
 
 # End of https://www.gitignore.io/api/osx,node,linux,macos,windows
 uploads/ 
+
+# QA files to ignore
+QA-Automation/downloaded_*.txt
+QA-Automation/report.html
+QA-Automation/__pycache__/
