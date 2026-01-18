@@ -1,0 +1,17 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Pytest cache
+.pytest_cache/
+
+# Test outputs
+report.html
+downloaded_*.txt
+
+# Virtual environments (if any)
+venv/
+.env
+
+# Other temp files
+*.log

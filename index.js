@@ -1,6 +1,6 @@
 'use strict';
 
-// ✅ MUST be first
+// MUST be first
 require('dotenv').config();  
 
 // Load server
