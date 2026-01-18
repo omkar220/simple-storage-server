@@ -1,70 +1,53 @@
 'use strict';
 
+const fs = require('fs');
 const path = require('path');
-const aws3 = require('../lib/aws-s3');
 const mongoose = require('mongoose');
 const debug = require('debug')('http:file');
-const uuid = require('uuid/v4');
+const { v4: uuidv4 } = require('uuid');
 
 const File = mongoose.Schema({
-  filename: {type: String, required: true},
-  userId: {type: mongoose.Schema.Types.ObjectId, required: true, ref: 'auth'},
-  // objectKey and fileURI returned by AWS
-  objectKey: {type: String, required: true, unique: true},
-  fileURI: {type: String, required: true, unique: true},
+  filename: { type: String, required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'auth' },
+  objectKey: { type: String, required: true, unique: true },
+  fileURI: { type: String, required: true, unique: true },
 });
 
+// Local upload instead of AWS
 File.statics.upload = function (req) {
   return new Promise((resolve, reject) => {
-    if (!req.file)
-      return reject(new Error('Multi-part form data error: missing file data'));
-    if (!req.file.buffer)
-      return  reject(new Error('Multi-part form data error: missing file buffer'));
+    if (!req.file || !req.file.buffer) return reject(new Error('Missing file data'));
 
-    debug('upload: file:', req.file);
+    const uploadDir = path.join(__dirname, '../uploads');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir); // auto-create folder
 
-    let params = {
-      ACL: 'public-read',
-      Bucket: process.env.AWS_BUCKET,
-      Key: `user-${req.user._id}/files/${uuid()}${path.extname(req.file.originalname)}`,
-      Body: req.file.buffer,
-    };
+    const fileExt = path.extname(req.file.originalname);
+    const uniqueFileName = `${uuidv4()}${fileExt}`;
+    const filePath = path.join(uploadDir, uniqueFileName);
 
-    return aws3.uploadProm(params)
-      .then(data => {
-        debug('Returned from upload!');
+    fs.writeFile(filePath, req.file.buffer, (err) => {
+      if (err) return reject(err);
 
-        let fileData = {
-          filename: req.params.filename,
-          userId: req.user._id,
-          fileURI: data.Location,
-          objectKey: data.Key,
-        };
-
-        debug('upload: File data:', fileData);
-
-        resolve(fileData);
-      })
-      .catch(reject);
+      resolve({
+        filename: req.params.filename,
+        userId: req.user._id,
+        objectKey: filePath,
+        fileURI: `file://${filePath}`,
+      });
+    });
   });
 };
 
+// Local delete
 File.methods.delete = function () {
   return new Promise((resolve, reject) => {
-    debug('delete:');
-
-    let params = {
-      Bucket: process.env.AWS_BUCKET,
-      Key: this.objectKey,
-    };
-
-    return(aws3.deleteProm(params))
-      .then(data => debug('data', data))
-      .then(this.remove())
-      .then(resolve)
-      .catch(reject);
+    try {
+      if (fs.existsSync(this.objectKey)) fs.unlinkSync(this.objectKey);
+      this.remove().then(resolve).catch(reject);
+    } catch (err) {
+      reject(err);
+    }
   });
-
 };
 
 module.exports = mongoose.model('file', File);
